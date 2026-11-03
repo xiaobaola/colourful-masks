@@ -159,7 +159,7 @@ const HEX   = ['#ff4d5e','#3dff88','#4da6ff','#f2f2f2'];
 const HEXA  = ['rgba(255,77,94,','rgba(61,255,136,','rgba(77,166,255,','rgba(242,242,242,'];
 const CNAME = ['红','绿','蓝','白'];
 const MNAME = ['红 · 愤怒面具','绿 · 快乐面具','蓝 · 冷静面具','白 · 无面'];
-const SKILL = ['左键：冲击（朝鼠标方向猛冲）','左键：射击（发射子弹）','按住左键：牵引（拉向自己，碰撞伤害）','左键点击敌人：变身克制其颜色'];
+const SKILL = ['左键：冲击（朝鼠标方向猛冲）','左键：射击（发射子弹）','左键点击：牵引 2 秒（把克制敌人拉向自己，碰撞伤害）','左键点击敌人：变身克制其颜色'];
 // countersOf(c): c 克制的颜色；counteredBy(c): 克制 c 的颜色
 const countersOf  = c => (c+1)%3;
 const counteredBy = c => (c+2)%3;
@@ -227,6 +227,7 @@ function makePlayer(x,y){ return {
   x,y,vx:0,vy:0,r:15,hp:100,maxhp:100,color:WHITE,
   dashT:0,dashCd:0,dashHits:null,
   shootCd:0,
+  pullT:0,pullCd:0,pullTarget:null,
   invuln:0,hitFlash:0,faceA:0,
 };}
 function makeMinion(x,y,color,home){ return {
@@ -349,6 +350,16 @@ function onLeftClick(){
       p.shootCd=0.68;
       SFX.shoot();
     }
+  }else if(p.color===BLUE){
+    // 牵引：点击后持续 2 秒，把鼠标方向的克制敌人拉向自己
+    if(p.pullT<=0 && p.pullCd<=0){
+      const t=pickPullTarget();
+      if(t){
+        p.pullT=2.0; p.pullTarget=t;
+        floatText(t.x,t.y-18,'牵引!','rgba(77,166,255,0.95)',13);
+        beep(300,.3,'sine',.08,180);
+      }
+    }
   }else if(p.color===WHITE){
     // 点击敌人 → 变身为克制它的颜色
     let best=null,bd=1e9;
@@ -358,7 +369,6 @@ function onLeftClick(){
     }
     if(best){ setColor(countersOf(best.color)); floatText(best.x,best.y-18,'锁定！',HEX[WHITE],13); }
   }
-  // 蓝色：牵引为按住持续，在 update 中处理
 }
 function hurtPlayer(dmg,srcColor){
   const p=player;
@@ -392,19 +402,23 @@ function updatePlayer(dt){
   // 边界反弹
   if(p.x<p.r){p.x=p.r;p.vx*=-.6;} if(p.x>W-p.r){p.x=W-p.r;p.vx*=-.6;}
   if(p.y<p.r){p.y=p.r;p.vy*=-.6;} if(p.y>H-p.r){p.y=H-p.r;p.vy*=-.6;}
-  p.dashCd-=dt; p.shootCd-=dt; p.invuln-=dt; p.hitFlash-=dt;
+  p.dashCd-=dt; p.shootCd-=dt; p.invuln-=dt; p.hitFlash-=dt; p.pullCd-=dt;
 
-  // 蓝色牵引
-  if(p.color===BLUE && mouse.down && state==='play'){
-    const target=pullTarget();
-    if(target){
-      const a=Math.atan2(p.y-target.y,p.x-target.x);
-      target.vx=Math.cos(a)*200; target.vy=Math.sin(a)*200;
+  // 蓝色牵引：点击后持续 2 秒，目标持续被拉向自己
+  if(p.pullT>0){
+    p.pullT-=dt;
+    const t=p.pullTarget;
+    if(p.pullT<=0||!minions.includes(t)){
+      p.pullT=0; p.pullTarget=null; p.pullCd=0.8; // 牵引结束/目标死亡后短暂冷却
+    }else{
+      const a=Math.atan2(p.y-t.y,p.x-t.x);
+      t.vx=Math.cos(a)*200; t.vy=Math.sin(a)*200;
+      if(Math.random()<dt*20) burst(t.x,t.y,HEXA[BLUE]+'0.5)',1,40);
     }
   }
 }
-function pullTarget(){
-  // 蓝色克制红色：拉取鼠标方向附近的红色敌人
+function pickPullTarget(){
+  // 蓝色克制红色：选取鼠标方向附近的红色敌人
   const p=player, want=countersOf(BLUE); // RED
   let best=null,bd=1e9;
   for(const m of minions){
@@ -420,7 +434,7 @@ function pullTarget(){
 function updateMinions(dt){
   for(const m of minions){
     m.hitFlash-=dt; m.dmgCd-=dt; m.wob+=dt*2;
-    if(player.color===BLUE && mouse.down && pullTarget()===m){
+    if(player.pullT>0 && player.pullTarget===m){
       // 被牵引中，速度已由牵引设置
     }else{
       // 缓慢追向玩家
@@ -777,10 +791,10 @@ function draw(){
       ctx.strokeStyle=HEXA[boss?boss.color:WHITE]+'.2)';
       ctx.lineWidth=20;ctx.beginPath();ctx.arc(r.x,r.y,r.r,0,7);ctx.stroke();
     }
-    // 牵引虚线
-    if(player.color===BLUE&&mouse.down){
-      const t=pullTarget();
-      if(t){
+    // 牵引虚线（持续 2 秒）
+    if(player.pullT>0&&player.pullTarget){
+      const t=player.pullTarget;
+      if(minions.includes(t)){
         ctx.setLineDash([8,8]); ctx.lineDashOffset=-performance.now()/24;
         ctx.strokeStyle=HEXA[BLUE]+'.85)'; ctx.lineWidth=2.5;
         ctx.beginPath();ctx.moveTo(player.x,player.y);ctx.lineTo(t.x,t.y);ctx.stroke();
