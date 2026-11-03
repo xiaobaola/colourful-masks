@@ -120,7 +120,7 @@
     <b>操作</b>：WASD 移动 · 角色头部始终指向鼠标 · <b>鼠标左键攻击</b> · ESC 暂停。所有物体都有碰撞体积并会反弹。<br>
     <b>面罩系统</b>：场上敌人被击败时会累计该颜色的击杀数，每凑满 3 个掉落对应颜色的面罩（存在 20 秒），走过去拾取即切换为该颜色（回复 1 点生命）。<br>
     <b>火 · 红 = 近战弧击</b>：弧形角度随击败红色敌人成长（3° → 60°）；<b>草 · 绿 = 远程射击</b>：子弹数随拾取绿色面罩成长（1 → 18，满 6 发变散射）；<b>水 · 蓝 = 周期波动</b>：随蓝色状态累计时间自动增强频率、范围与伤害（伤害最高 5 点）。<br>
-    <b>克制规则</b>：同色伤害 ×1 · 克制 ×2 · 被克制 ×0。<b>白色粗描边</b> = 可攻击目标，<b>灰色描边</b> = 无法造成伤害的目标。BOSS 每次受击都会变成你的颜色——只有克制它的攻击才能奏效。
+    <b>克制规则</b>：同色伤害 ×1 · 克制 ×2 · 被克制 ×0。<b>白色粗描边</b> = 可攻击目标，<b>灰色描边</b> = 无法造成伤害的目标。BOSS 每次受击都会变成<b>克制你的颜色</b>，想继续伤它必须换成能克制它的颜色（也就是你原本克制的那种颜色）；场上若没有你能克制的敌人，会自动补 1~2 个。
   </div>
 </div>
 
@@ -304,7 +304,7 @@ function makeBoss(){
     atkCd:3.0,maybeT:0.4,hitCd:0,contactCd:0,hitFlash:0,stun:0,volley:0,volleyT:0,summonT:0,bob:rand(0,6)};
 }
 function startGame(m){
-  mode=m;state='play';paused=false;gameTime=0;dmgToBoss=0;
+  mode=m;state='play';paused=false;gameTime=0;dmgToBoss=0;rescueT=0;
   const sp=randInArena(0.3);
   player=makePlayer(sp.x,sp.y);
   bullets=[];eBullets=[];rings=[];arcFx=[];masks=[];parts=[];texts=[];
@@ -332,8 +332,7 @@ function startGame(m){
   document.getElementById('pauseTip').classList.remove('on');
   beep(520,.1,'sine',.1);
 }
-function spawnMinion(){
-  const n=randi(1,3), colors=[countersOf(player.color)];
+function spawnMinion(){  const n=randi(1,3), colors=[countersOf(player.color)];
   for(let i=1;i<n;i++) colors.push(randi(0,2));
   colors.forEach(c=>{
     const p=randInArena(0.75);
@@ -405,6 +404,24 @@ function updateMasks(dt){
       floatText(player.x,player.y-46,ENAME[mk.color],HEX[mk.color],14);
       SFX.pick();
     }
+  }
+}
+
+/* 1.4 场上没有「玩家能克制的颜色」的敌人时，补充 1~2 个 */
+let rescueT=0;
+function ensureAttackable(){
+  const need=countersOf(player.color); // 玩家能攻击的颜色
+  if(minions.some(m=>m.color===need)) return;
+  const n=Math.min(randi(1,2), Math.max(0,12-minions.length));
+  for(let i=0;i<n;i++){
+    let p=null,tries=0;
+    do{ p=randInArena(0.75); tries++; }while(Math.hypot(p.x-player.x,p.y-player.y)<150 && tries<24);
+    minions.push(makeMinion(p.x,p.y,need));
+    burst(p.x,p.y,HEX[need],12,150);
+  }
+  if(n>0){
+    floatText(player.x,player.y-52,ESYM[need]+'色演员补位登场','#6b6154',13);
+    beep(420,.16,'sine',.07,120);
   }
 }
 
@@ -699,7 +716,7 @@ function damageBoss(dmg){
   SFX.bossH();shake(5,.18);
   floatText(b.x,b.y-b.r-12,'-'+dmg,'#6b6154',15);
   if(b.hp<=0){b.hp=0;burst(b.x,b.y,'#e8a13d',60,360);shake(14,.5);endGame(true);return;}
-  b.color=player.color; // 每次掉血变成玩家当前颜色
+  b.color=counteredBy(player.color); // 每次掉血变成「克制玩家」的颜色
   if(b.phase===1&&b.hp<=25){
     b.phase=2;b.color=randi(0,2);b.state='idle';b.atkCd=2.2;b.stun=1.6;
     eBullets.length=0;rings.length=0;
@@ -918,6 +935,7 @@ function loop(now){
     if(mode==='boss')updateBoss(dt);
     updateBullets(dt);
     updateMasks(dt);
+    rescueT-=dt; if(rescueT<=0){rescueT=1;ensureAttackable();}
     for(let i=0;i<minions.length;i++)
       for(let j=i+1;j<minions.length;j++)separate(minions[i],minions[j]);
     if(boss)for(const m of minions)separate(boss,m);
