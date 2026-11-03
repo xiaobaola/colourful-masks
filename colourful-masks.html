@@ -367,7 +367,7 @@ function onLeftClick(){
       const d=Math.hypot(mouse.x-m.x,mouse.y-m.y);
       if(d<m.r+16 && d<bd){bd=d;best=m;}
     }
-    if(best){ setColor(countersOf(best.color)); floatText(best.x,best.y-18,'锁定！',HEX[WHITE],13); }
+    if(best){ setColor(counteredBy(best.color)); floatText(best.x,best.y-18,'锁定！',HEX[WHITE],13); }
   }
 }
 function hurtPlayer(dmg,srcColor){
