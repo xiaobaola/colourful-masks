@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>三色牌局 · Colour Stack v3.0</title>
+<style>
+  :root{
+    --red:#e05a52; --green:#46a86b; --blue:#4a86c8;
+    --paper:#faf7f0; --paper2:#fffdf8; --ink:#3c3730; --dim:#948b7c;
+    --line:rgba(120,100,70,.22); --shadow:0 10px 24px -12px rgba(90,70,40,.45);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;margin:0;}
+  body{
+    background:var(--paper); color:var(--ink); overflow:hidden; user-select:none;
+    font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;
+  }
+
+  /* ================= 通用 ================= */
+  .hidden{display:none !important;}
+  .screen{
+    position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:
+      radial-gradient(900px 520px at 12% -6%, rgba(224,90,82,.13), transparent 55%),
+      radial-gradient(900px 520px at 50% 110%, rgba(70,168,107,.13), transparent 55%),
+      radial-gradient(900px 520px at 92% -6%, rgba(74,134,200,.13), transparent 55%),
+      var(--paper);
+    overflow:auto;
+  }
+  .title{font-size:48px;font-weight:900;letter-spacing:10px;}
+  .title .r{color:var(--red);} .title .g{color:var(--green);} .title .b{color:var(--blue);}
+  .sub{color:var(--dim);letter-spacing:6px;font-size:13px;margin:8px 0 28px;}
+  .btn{
+    padding:14px 40px;border-radius:14px;border:2px solid var(--line);cursor:pointer;
+    background:var(--paper2);color:var(--ink);font-size:18px;font-weight:800;letter-spacing:4px;
+    box-shadow:var(--shadow);transition:transform .15s, box-shadow .2s;
+  }
+  .btn:hover{transform:translateY(-2px);box-shadow:0 14px 26px -12px rgba(90,70,40,.5);}
+  .btn.small{padding:9px 24px;font-size:14px;letter-spacing:2px;box-shadow:none;}
+  .rules{
+    background:var(--paper2);border:2px solid var(--line);border-radius:16px;
+    padding:18px 30px;max-width:820px;color:#6f675b;font-size:13px;line-height:2;box-shadow:var(--shadow);
+  }
+  .rules b{color:var(--ink);}
+  .ctri{display:flex;gap:10px;align-items:center;justify-content:center;margin-bottom:16px;font-weight:800;font-size:13px;color:var(--dim);}
+  .chip{width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+    color:#fff;font-size:12px;font-weight:900;}
+  .chip.c0{background:var(--red);} .chip.c1{background:var(--green);} .chip.c2{background:var(--blue);}
+  .verdict{font-size:42px;font-weight:900;letter-spacing:12px;margin-bottom:8px;}
+  .verdict.win{color:var(--green);} .verdict.lose{color:var(--red);}
+  .stats{color:var(--dim);letter-spacing:2px;margin-bottom:26px;font-size:14px;}
+
+  /* ================= 布局 ================= */
+  #game{position:fixed;inset:0;display:flex;flex-direction:column;}
+  #top{flex:0 0 75%;display:flex;min-height:0;}
+  #side{
+    flex:0 0 16.6667%;min-width:170px;border-right:2px solid var(--line);
+    background:linear-gradient(180deg,#fffdf8,#f5f1e6);
+    padding:12px 10px;display:flex;flex-direction:column;gap:9px;overflow:auto;
+  }
+  #board{flex:1;position:relative;min-height:0;overflow:hidden;
+    background:
+      radial-gradient(600px 300px at 70% 20%, rgba(224,90,82,.06), transparent 70%),
+      radial-gradient(600px 300px at 20% 80%, rgba(74,134,200,.06), transparent 70%),
+      repeating-linear-gradient(0deg, rgba(120,100,70,.035) 0 1px, transparent 1px 46px),
+      repeating-linear-gradient(90deg, rgba(120,100,70,.035) 0 1px, transparent 1px 46px),
+      #fbf8f1;
+  }
+  #hand{
+    flex:0 0 25%;border-top:2px dashed var(--line);
+    background:linear-gradient(180deg,#f7f3e9,#fffdf8);
+    display:flex;flex-direction:column;min-height:0;
+  }
+  .handHead{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:6px 16px 0;font-size:12px;color:var(--dim);letter-spacing:1px;
+  }
+  .handArea{flex:1;display:flex;align-items:center;justify-content:center;gap:14px;padding:4px 16px 12px;}
+
+  /* ================= 侧栏 ================= */
+  .sideTitle{font-size:11px;letter-spacing:3px;color:var(--dim);margin-top:2px;}
+  .deckBlock{border:2px solid var(--line);border-radius:12px;background:var(--paper2);padding:7px 8px;}
+  .deckName{font-size:12px;font-weight:900;letter-spacing:2px;margin-bottom:5px;display:flex;align-items:center;gap:6px;}
+  .dot{width:10px;height:10px;border-radius:50%;}
+  .dot.c0{background:var(--red);} .dot.c1{background:var(--green);} .dot.c2{background:var(--blue);}
+  .mini{
+    display:block;width:100%;margin-top:4px;padding:5px 8px;border-radius:8px;cursor:pointer;
+    border:1px solid var(--line);background:#fff;color:#6f675b;font-size:11px;text-align:left;
+    font-family:inherit;transition:background .15s;
+  }
+  .mini:hover{background:#f3eee2;}
+  .mini b{color:var(--ink);}
+  .action{
+    width:100%;padding:10px 8px;border-radius:12px;cursor:pointer;font-size:14px;font-weight:900;
+    letter-spacing:2px;border:2px solid var(--line);background:#fff;color:var(--ink);font-family:inherit;
+    transition:transform .12s, background .15s;
+  }
+  .action:hover{transform:translateY(-1px);background:#f7f2e6;}
+  .action.end{background:linear-gradient(180deg,#ffe9e6,#fff);border-color:rgba(224,90,82,.5);color:#a8402f;}
+  .action:disabled{opacity:.45;cursor:not-allowed;transform:none;}
+  .statusBox{border:2px solid var(--line);border-radius:12px;background:var(--paper2);padding:8px;font-size:12px;line-height:1.9;color:#6f675b;}
+  .statusBox b{color:var(--ink);}
+  .log{flex:1;min-height:60px;overflow:hidden;border:2px solid var(--line);border-radius:12px;background:var(--paper2);
+    padding:6px 8px;font-size:11px;line-height:1.75;color:#8b8274;}
+  .log div{border-bottom:1px dashed rgba(120,100,70,.14);padding:1px 0;}
+
+  /* ================= 卡牌 ================= */
+  .card{
+    position:absolute;top:0;left:0;width:var(--cw,100px);height:var(--ch,138px);
+    will-change:transform;transition:transform .18s ease;
+  }
+  .card .inner{
+    position:absolute;inset:0;border-radius:12px;background:#fffdf8;
+    border:2.5px solid rgba(120,100,70,.3);
+    box-shadow:0 6px 14px -8px rgba(90,70,40,.55);
+    display:flex;flex-direction:column;overflow:hidden;
+    transition:transform .14s ease, box-shadow .14s ease, border-color .12s;
+  }
+  .card:hover .inner{transform:translateY(-12px) scale(1.04);box-shadow:0 18px 26px -12px rgba(90,70,40,.6);}
+  .card.c0 .inner{border-color:var(--red);} 
+  .card.c1 .inner{border-color:var(--green);} 
+  .card.c2 .inner{border-color:var(--blue);} 
+  .ctop{font-size:10px;font-weight:900;letter-spacing:1px;color:#fff;padding:3px 6px;text-align:center;background:#b9b0a0;}
+  .card.c0 .ctop{background:var(--red);} .card.c1 .ctop{background:var(--green);} .card.c2 .ctop{background:var(--blue);}
+  .cbody{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:2px;}
+  .bigv{font-size:30px;font-weight:900;line-height:1;letter-spacing:-1px;}
+  .subv{font-size:10px;color:var(--dim);letter-spacing:1px;}
+  .cfoot{font-size:10px;text-align:center;color:#7d7466;padding:2px 4px;border-top:1px dashed rgba(120,100,70,.2);background:#fdfaf3;}
+  .hpMini{font-size:12px;font-weight:900;}
+  .hpBar{width:82%;height:6px;border-radius:4px;background:rgba(120,100,70,.16);overflow:hidden;}
+  .hpBar i{display:block;height:100%;background:var(--green);transition:width .2s;}
+  .badge{position:absolute;top:-8px;right:-8px;min-width:22px;height:22px;border-radius:11px;background:#3c3730;color:#fff;
+    font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 5px;border:2px solid #fffdf8;}
+  /* 玩家 / BOSS / 敌人卡 */
+  .card.player{--cw:112px;--ch:152px;}
+  .card.boss{--cw:132px;--ch:176px;}
+  .card.enemy{--cw:96px;--ch:132px;}
+  .card.result{--cw:84px;--ch:64px;pointer-events:none;transition:opacity .4s;}
+  .card.result .inner{border-style:dashed;justify-content:center;align-items:center;}
+  .card.result .rtxt{font-size:16px;font-weight:900;}
+  .card.stackChild .inner{border-style:solid;}
+  /* 拖拽与高亮 */
+  .card.dragging .inner{opacity:.35;}
+  .card.dropok .inner{box-shadow:0 0 0 4px rgba(255,255,255,.9),0 0 22px 4px rgba(70,168,107,.75);}
+  .card.dropno .inner{box-shadow:0 0 0 4px rgba(255,255,255,.8),0 0 18px 3px rgba(200,80,80,.55);}
+  .card.resolving .inner{border-color:#fff !important;box-shadow:0 0 0 4px #fff, 0 0 28px 6px rgba(255,255,255,.95);}
+  #ghost{position:fixed;z-index:99;pointer-events:none;opacity:.95;transform:translate(-50%,-50%) rotate(-3deg) scale(1.06);}
+
+  /* 手牌 */
+  .handCard{position:relative;width:var(--cw,100px);height:var(--ch,138px);cursor:grab;}
+  .handCard .inner{position:absolute;inset:0;border-radius:12px;background:#fffdf8;border:2.5px solid rgba(120,100,70,.3);
+    box-shadow:0 6px 14px -8px rgba(90,70,40,.5);display:flex;flex-direction:column;overflow:hidden;
+    transition:transform .16s ease, box-shadow .16s;}
+  .handCard:hover .inner{transform:translateY(-14px) scale(1.05);box-shadow:0 20px 28px -14px rgba(90,70,40,.6);}
+  .handCard.c0 .inner{border-color:var(--red);} .handCard.c1 .inner{border-color:var(--green);} .handCard.c2 .inner{border-color:var(--blue);}
+  .handCard.c0 .ctop{background:var(--red);} .handCard.c1 .ctop{background:var(--green);} .handCard.c2 .ctop{background:var(--blue);}
+  .handCard.out .inner{opacity:.3;}
+
+  /* 弹层 */
+  #modal{position:fixed;inset:0;z-index:70;display:none;align-items:center;justify-content:center;background:rgba(60,55,48,.35);}
+  #modal.on{display:flex;}
+  .modalBox{background:var(--paper2);border:2px solid var(--line);border-radius:18px;padding:20px 26px;min-width:340px;
+    max-width:70vw;max-height:70vh;overflow:auto;box-shadow:0 24px 60px -20px rgba(60,50,30,.5);}
+  .modalHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+  .modalTitle{font-size:16px;font-weight:900;letter-spacing:3px;}
+  .cList{display:flex;flex-wrap:wrap;gap:8px;}
+  .cItem{border:2px solid var(--line);border-radius:9px;padding:6px 10px;font-size:12px;background:#fff;min-width:72px;text-align:center;}
+  .cItem.c0{border-color:var(--red);} .cItem.c1{border-color:var(--green);} .cItem.c2{border-color:var(--blue);}
+  .cItem b{display:block;font-size:15px;}
+  .empty{color:var(--dim);font-size:12px;letter-spacing:1px;}
+
+  #toast{
+    position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
+    background:rgba(255,253,248,.96);border:2px solid var(--line);border-radius:12px;
+    padding:7px 18px;font-size:13px;font-weight:700;color:#6f675b;letter-spacing:1px;
+    opacity:0;transition:opacity .25s, transform .25s;pointer-events:none;box-shadow:var(--shadow);
+  }
+  #toast.on{opacity:1;transform:translateX(-50%) translateY(-4px);}
+</style>
+</head>
+<body>
+
+<!-- ============ 主菜单 ============ -->
+<div class="screen" id="menu">
+  <div class="title"><span class="r">三</span><span class="g">色</span><span class="b">牌</span><span>局</span> <span style="font-size:26px;letter-spacing:2px;">v3.0</span></div>
+  <div class="sub">COLOUR STACK — 拖拽 · 堆叠 · 结算</div>
+  <div class="ctri">
+    <span class="chip c0">红</span>克制<span class="chip c1">绿</span>克制<span class="chip c2">蓝</span>克制<span class="chip c0">红</span>
+  </div>
+  <div class="btns" style="display:flex;gap:18px;margin-bottom:22px;">
+    <button class="btn" id="btnStart">开始牌局 · BOSS 战</button>
+  </div>
+  <div class="rules">
+    <b>玩法</b>：底部是你当前颜色卡组抽出的 5 张手牌。把<b>攻击牌</b>拖到敌人 / BOSS 身上堆叠，把<b>恢复牌</b>拖到<b>你自己</b>的卡上堆叠。点击「堆叠结算」执行伤害与治疗 —— 每回合只有 <b>2 次</b>结算机会。<br>
+    <b>颜色</b>：同色伤害 ×1 · 克制 ×2 · 被克制 ×0（伤害为 0 时无法伤害对方）。每回合结束角色自动切换为<b>下一颜色</b>；击败敌人则立刻变为<b>该敌人的颜色</b>。每次变色回复 2 点生命，并从对应颜色卡组重新抽 5 张。<br>
+    <b>卡组</b>：红 / 绿各 10 张（5 张 1 点攻击 + 5 张 2 点攻击）；蓝 10 张（5 张 1 点攻击 + 5 张恢复 1 点生命）。抽完会把已打出的牌洗回牌堆继续抽。<br>
+    <b>BOSS</b>：50 点生命，每次掉血都会变成<b>克制你的颜色</b>，只有克制它的颜色才能伤到它；它每回合会召唤、攻击、治疗自己或小怪、随机换色。BOSS 克制你时打 6 点、同色 3 点、被你克制 0 点。<br>
+    <b>回合</b>：点击「结束回合」后，敌人依次攻击你（克制 2 点 / 同色 1 点 / 被克制 0 点），然后 BOSS 行动。
+  </div>
+</div>
+
+<!-- ============ 结算 ============ -->
+<div class="screen hidden" id="result">
+  <div class="verdict" id="verdict">胜 利</div>
+  <div class="stats" id="stats"></div>
+  <div style="display:flex;gap:16px;">
+    <button class="btn small" id="btnRetry">再来一局</button>
+    <button class="btn small" id="btnMenu">返回菜单</button>
+  </div>
+</div>
+
+<!-- ============ 游戏 ============ -->
+<div id="game" class="hidden">
+  <div id="top">
+    <aside id="side">
+      <div class="statusBox" id="statusBox"></div>
+      <div class="sideTitle">卡组查看</div>
+      <div class="deckBlock">
+        <div class="deckName"><span class="dot c0"></span>红 · 火</div>
+        <button class="mini" data-act="remain" data-c="0">剩余卡牌 <b id="r0">10</b></button>
+        <button class="mini" data-act="played" data-c="0">已打出 <b id="p0">0</b></button>
+      </div>
+      <div class="deckBlock">
+        <div class="deckName"><span class="dot c1"></span>绿 · 草</div>
+        <button class="mini" data-act="remain" data-c="1">剩余卡牌 <b id="r1">10</b></button>
+        <button class="mini" data-act="played" data-c="1">已打出 <b id="p1">0</b></button>
+      </div>
+      <div class="deckBlock">
+        <div class="deckName"><span class="dot c2"></span>蓝 · 水</div>
+        <button class="mini" data-act="remain" data-c="2">剩余卡牌 <b id="r2">10</b></button>
+        <button class="mini" data-act="played" data-c="2">已打出 <b id="p2">0</b></button>
+      </div>
+      <div class="sideTitle">本回合行动</div>
+      <button class="action" id="btnStack">堆叠结算 <span id="stackLeft">2</span></button>
+      <button class="action end" id="btnEnd">结束回合</button>
+      <div class="sideTitle">记录</div>
+      <div class="log" id="log"></div>
+    </aside>
+    <div id="board">
+      <div id="toast"></div>
+    </div>
+  </div>
+  <div id="hand">
+    <div class="handHead">
+      <span id="handHint">手牌 · 拖拽攻击牌到敌人 / BOSS，拖拽恢复牌到自己身上</span>
+      <span id="turnInfo"></span>
+    </div>
+    <div class="handArea" id="handArea"></div>
+  </div>
+</div>
+
+<!-- ============ 弹层 ============ -->
+<div id="modal">
+  <div class="modalBox">
+    <div class="modalHead">
+      <div class="modalTitle" id="modalTitle">卡组</div>
+      <button class="btn small" id="modalClose">关闭</button>
+    </div>
+    <div class="cList" id="modalList"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================
+   三色牌局 v3.0 —— 卡牌堆叠回合制
+   红克绿 · 绿克蓝 · 蓝克红；同色×1 克制×2 被克制×0
+   ========================================================= */
+const CNAME = ['红','绿','蓝'];
+const HEX   = ['#e05a52','#46a86b','#4a86c8'];
+const countersOf  = c => (c+1)%3;   // c 克制的颜色
+const counteredBy = c => (c+2)%3;   // 克制 c 的颜色
+function mult(pc,tc){ if(tc===countersOf(pc)) return 2; if(tc===pc) return 1; return 0; }
+const randi=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+/* ---------------- 元素 ---------------- */
+const boardEl=document.getElementById('board');
+const handArea=document.getElementById('handArea');
+const logEl=document.getElementById('log');
+const toastEl=document.getElementById('toast');
+
+/* ---------------- 状态 ---------------- */
+let S=null;
+let boardCards=[];   // 场上的底层卡（玩家/敌人的底座都在这）
+let busy=false;
+
+function newState(){
+  const startColor=randi(0,2);
+  const st={
+    color:startColor, hp:100, maxhp:100, turn:1, stackUses:2,
+    decks:[0,1,2].map(()=>({draw:[],played:[]})),
+    hand:[], boss:null, enemies:[], resultCards:[], over:false,
+    bossSummonCd:1, pendingSwitch:null,
+  };
+  for(let c=0;c<3;c++) st.decks[c].draw=buildDeck(c);
+  return st;
+}
+function buildDeck(color){
+  const a=[];
+  if(color===2){ for(let i=0;i<5;i++) a.push({type:'attack',dmg:1}); for(let i=0;i<5;i++) a.push({type:'heal',dmg:1}); }
+  else { for(let i=0;i<5;i++) a.push({type:'attack',dmg:1}); for(let i=0;i<5;i++) a.push({type:'attack',dmg:2}); }
+  return shuffle(a);
+}
+
+/* ---------------- 卡牌创建 ---------------- */
+let uid=0;
+function mkCard(o){
+  return Object.assign({id:'k'+(++uid), type:'attack', color:0, dmg:0, hp:0, maxhp:0,
+    stack:[], base:null, nx:0, ny:0, el:null}, o);
+}
+function cardTitle(c){
+  if(c.type==='attack') return CNAME[c.color]+' · 攻击';
+  if(c.type==='heal')   return CNAME[c.color]+' · 恢复';
+  if(c.type==='enemy')  return '小怪 · '+CNAME[c.color];
+  if(c.type==='boss')   return 'BOSS · 面具团长';
+  if(c.type==='player') return '你 · '+CNAME[c.color];
+  return '结算';
+}
+function cardBodyHTML(c){
+  if(c.type==='attack') return `<div class="bigv" style="color:${HEX[c.color]}">${c.dmg}</div><div class="subv">攻击力</div>`;
+  if(c.type==='heal')   return `<div class="bigv" style="color:${HEX[c.color]}">+1</div><div class="subv">恢复生命</div>`;
+  if(c.type==='enemy'){
+    const pct=c.hp/c.maxhp*100;
+    return `<div class="bigv" style="color:${HEX[c.color]}">敌</div>
+      <div class="hpMini">${c.hp} / ${c.maxhp}</div>
+      <div class="hpBar"><i style="width:${pct}%;background:${HEX[c.color]}"></i></div>`;
+  }
+  if(c.type==='boss'){
+    const pct=c.hp/c.maxhp*100;
+    return `<div class="bigv" style="color:${HEX[c.color]};font-size:38px;">王</div>
+      <div class="hpMini">${c.hp} / ${c.maxhp}</div>
+      <div class="hpBar"><i style="width:${pct}%;background:${HEX[c.color]}"></i></div>
+      <div class="subv">克制你的颜色才可伤害</div>`;
+  }
+  if(c.type==='player'){
+    const pct=c.hp/c.maxhp*100;
+    return `<div class="bigv" style="color:#3c3730;font-size:34px;">我</div>
+      <div class="hpMini">${c.hp} / ${c.maxhp}</div>
+      <div class="hpBar"><i style="width:${pct}%;background:#46a86b"></i></div>
+      <div class="subv">当前 ${CNAME[c.color]} 色</div>`;
+  }
+  return '';
+}
+function renderCard(c){
+  const el=document.createElement('div');
+  el.className='card '+c.type+' c'+c.color;
+  el.dataset.id=c.id;
+  el.innerHTML=`<div class="inner">
+      <div class="ctop">${cardTitle(c)}</div>
+      <div class="cbody">${cardBodyHTML(c)}</div>
+      <div class="cfoot">${c.type==='enemy'?'生命 '+c.hp:'　'}</div>
+    </div>`;
+  c.el=el;
+  boardEl.appendChild(el);
+  return el;
+}
+function refreshCard(c){
+  if(!c.el) return;
+  c.el.className='card '+c.type+' c'+c.color+(c.base?' stackChild':'');
+  c.el.querySelector('.ctop').textContent=cardTitle(c);
+  c.el.querySelector('.cbody').innerHTML=cardBodyHTML(c);
+  const f=c.el.querySelector('.cfoot');
+  if(f) f.textContent=(c.type==='enemy'?'生命 '+c.hp:'　');
+  positionCard(c);
+}
+
+/* ---------------- 位置 ---------------- */
+function boardSize(){ return {w:boardEl.clientWidth, h:boardEl.clientHeight}; }
+function positionCard(c){
+  if(!c.el) return;
+  const {w,h}=boardSize();
+  let x,y;
+  if(c.base){
+    const i=c.base.stack.indexOf(c);
+    const bx=(c.base.nx!==undefined? c.base.nx*w : 0), by=(c.base.ny!==undefined? c.base.ny*h : 0);
+    const {w:bw}=boardSize();
+    x=bx+16+i*18; y=by-22-i*20;
+  }else{
+    x=c.nx*w; y=c.ny*h;
+  }
+  c.el.style.transform=`translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  c.el.style.zIndex=10+(c.base? c.base.stack.indexOf(c)+2 : 0);
+}
+function positionAll(){
+  for(const c of boardCards){
+    positionCard(c);
+    for(const k of c.stack) positionCard(k);
+  }
+  for(const r of S.resultCards) if(r.el) positionCard(r);
+}
+
+/* ---------------- 抽牌 / 手牌 ---------------- */
+function drawHand(){
+  // 旧手牌洗回「已打出」
+  for(const c of S.hand) S.decks[c.color].played.push({type:c.type,dmg:c.dmg});
+  S.hand=[];
+  handArea.innerHTML='';
+  let got=0;
+  while(got<5){
+    const d=S.decks[S.color];
+    if(d.draw.length===0){
+      if(d.played.length===0) break;
+      d.draw=shuffle(d.played); d.played=[];
+    }
+    const spec=d.draw.pop();
+    const c=mkCard({type:spec.type,dmg:spec.dmg,color:S.color});
+    S.hand.push(c);
+    handArea.appendChild(makeHandEl(c));
+    got++;
+  }
+  updateUI();
+}
+function makeHandEl(c){
+  const el=document.createElement('div');
+  el.className='handCard c'+c.color;
+  el.dataset.id=c.id;
+  el.innerHTML=`<div class="inner">
+      <div class="ctop">${cardTitle(c)}</div>
+      <div class="cbody">${cardBodyHTML(c)}</div>
+      <div class="cfoot">拖到目标上</div>
+    </div>`;
+  el.addEventListener('pointerdown',e=>startDrag(e,c,el));
+  c.handEl=el;
+  return el;
+}
+
+/* ---------------- 拖拽 ---------------- */
+let drag=null;
+function startDrag(e,c,el){
+  if(busy||S.over) return;
+  e.preventDefault();
+  const ghost=el.cloneNode(true);
+  ghost.id='ghost';
+  ghost.className='handCard c'+c.color;
+  ghost.style.position='fixed';
+  document.body.appendChild(ghost);
+  drag={card:c,ghost,el};
+  el.classList.add('out');
+  moveGhost(e.clientX,e.clientY);
+  window.addEventListener('pointermove',onDragMove);
+  window.addEventListener('pointerup',onDragUp,{once:true});
+}
+function moveGhost(x,y){ if(drag){drag.ghost.style.left=x+'px';drag.ghost.style.top=y+'px';} }
+function onDragMove(e){
+  if(!drag) return;
+  moveGhost(e.clientX,e.clientY);
+  // 高亮目标
+  for(const c of boardCards) c.el.classList.remove('dropok','dropno');
+  const t=targetUnder(e.clientX,e.clientY);
+  if(t){
+    const ok=(drag.card.type==='attack'&&(t.type==='enemy'||t.type==='boss'))||
+             (drag.card.type==='heal'&&t.type==='player');
+    t.el.classList.add(ok?'dropok':'dropno');
+    drag.target=t;drag.ok=ok;
+  }else drag.target=null;
+}
+function targetUnder(x,y){
+  const el=document.elementFromPoint(x,y);
+  if(!el) return null;
+  const cardEl=el.closest('.card');
+  if(!cardEl) return null;
+  const c=boardCards.find(k=>k.id===cardEl.dataset.id);
+  if(!c||c.type==='result') return null;
+  return c;
+}
+function onDragUp(e){
+  window.removeEventListener('pointermove',onDragMove);
+  if(!drag) return;
+  for(const c of boardCards) c.el.classList.remove('dropok','dropno');
+  const {card,target,ok}=drag;
+  drag.ghost.remove();
+  drag.el.classList.remove('out');
+  if(target&&ok){
+    // 从手牌移出，堆叠到目标
+    const i=S.hand.indexOf(card); if(i>=0) S.hand.splice(i,1);
+    if(card.handEl){card.handEl.remove();card.handEl=null;}
+    // 若目标身上已有同类牌，则叠在新牌上（保持一堆）
+    const top=target.stack.length? target.stack[target.stack.length-1] : target;
+    card.base=(top===target? target : top);
+    // 统一 base：直接以目标为底座，便于结算
+    card.base=target;
+    target.stack.push(card);
+    renderCard(card);
+    card.el.style.transition='none';
+    positionCard(card);
+    card.el.style.transition='';
+    toast(`已堆叠：${cardTitle(card)} → ${cardTitle(target)}`);
+    log(`堆叠 ${cardTitle(card)} → ${cardTitle(target)}`);
+    updateUI();
+  }else{
+    if(target&&!ok) toast('这张牌不能堆叠在这个目标上');
+  }
+  drag=null;
+}
+
+/* ---------------- 堆叠结算 ---------------- */
+async function resolveStacks(){
+  if(busy||S.over) return;
+  if(S.stackUses<=0){ toast('本回合的堆叠结算次数已用完'); return; }
+  // 遍历所有底座卡，找出可结算的卡组
+  const groups=[];
+  for(const base of boardCards){
+    if(!base.stack.length) continue;
+    if(base.type==='enemy'||base.type==='boss'){
+      const atk=base.stack.filter(k=>k.type==='attack');
+      if(atk.length) groups.push({base,kind:'attack',cards:atk});
+    }else if(base.type==='player'){
+      const hl=base.stack.filter(k=>k.type==='heal');
+      if(hl.length) groups.push({base,kind:'heal',cards:hl});
+    }
+  }
+  if(!groups.length){ toast('没有可结算的堆叠'); return; }
+
+  busy=true;
+  S.stackUses--;
+  updateUI();
+  // 加入结算队列并加白框
+  const queue=groups.slice();
+  for(const g of queue) g.base.el.classList.add('resolving');
+  log('—— 堆叠结算开始 ——');
+  await sleep(420);
+
+  let switchTo=null;
+  while(queue.length){
+    const g=queue.shift();
+    const base=g.base;
+    // 底座可能在之前的结算中死亡
+    if(!boardCards.includes(base)||base.hp<=0){ g.base.el&&g.base.el.classList.remove('resolving'); continue; }
+    const topBefore=base.stack[base.stack.length-1];
+    if(g.kind==='attack'){
+      const sum=g.cards.reduce((s,k)=>s+k.dmg,0);
+      const m=(base.type==='boss')
+        ? (mult(S.color,base.color)===2?2:0) // BOSS 只能被克制它的颜色伤害
+        : mult(S.color,base.color);
+      const dmg=sum*m;
+      if(dmg>0){
+        base.hp=Math.max(0,base.hp-dmg);
+        if(base.type==='boss'&&base.hp>0){
+          base.color=counteredBy(S.color); // 掉血后变为克制玩家的颜色
+          log(`BOSS 受击，变为 ${CNAME[base.color]}色（克制你的颜色）`);
+        }
+        refreshCard(base);
+        log(`对 ${cardTitle(base)} 造成 ${dmg} 点伤害（${sum}×${m}）`);
+        consumeCards(g.cards);
+        spawnResult(base,`-${dmg}`,'#a8402f',topBefore);
+        if(base.hp<=0){
+          if(base.type==='boss'){ win(); }
+          else { switchTo=base.color; killEnemy(base); }
+        }
+      }else{
+        log(`对 ${cardTitle(base)} 的伤害为 0（颜色被克制）`);
+        consumeCards(g.cards);
+        spawnResult(base,'0','#948b7c',topBefore);
+      }
+    }else{
+      const sum=g.cards.reduce((s,k)=>s+k.dmg,0);
+      S.hp=Math.min(S.maxhp,S.hp+sum);
+      refreshCard(base);
+      log(`为自己恢复 ${sum} 点生命`);
+      consumeCards(g.cards);
+      spawnResult(base,`+${sum}`,'#2f7a4d',topBefore);
+    }
+    await sleep(360);
+    if(S.over) break;
+  }
+  for(const g of groups) if(g.base.el) g.base.el.classList.remove('resolving');
+
+  if(switchTo!==null&&!S.over) await switchColor(switchTo,'击败敌人');
+  busy=false;
+  updateUI();
+}
+function consumeCards(cards){
+  for(const k of cards){
+    const b=k.base;
+    if(b){
+      const i=b.stack.indexOf(k); if(i>=0) b.stack.splice(i,1);
+    }
+    if(k.el){k.el.remove();k.el=null;}
+    S.decks[k.color].played.push({type:k.type,dmg:k.dmg});
+  }
+}
+/* 结算产物卡：3.1.2 旁边 / 3.1.3 顶部 / 3.1.4 底座位置 */
+function spawnResult(base,txt,color,topBefore){
+  const gone=!boardCards.includes(base)||base.hp<=0;
+  const topChanged=!base.stack.length||base.stack[base.stack.length-1]!==topBefore;
+  const r=mkCard({type:'result',color:base.color,nx:base.nx,ny:base.ny});
+  // 以像素定位
+  const {w,h}=boardSize();
+  let px,py;
+  if(gone){ px=base.nx*w; py=base.ny*h; }
+  else if(topChanged){ px=base.nx*w+10; py=base.ny*h-26; }
+  else { px=base.nx*w+108; py=base.ny*h+14; }
+  r.px=px;r.py=py;
+  const el=document.createElement('div');
+  el.className='card result c'+r.color;
+  el.style.transform=`translate(${px}px,${py}px)`;
+  el.style.zIndex=60;
+  el.innerHTML=`<div class="inner"><div class="rtxt" style="color:${color}">${txt}</div></div>`;
+  boardEl.appendChild(el);
+  r.el=el;
+  S.resultCards.push(r);
+  setTimeout(()=>{ el.style.opacity=0; setTimeout(()=>{el.remove();S.resultCards=S.resultCards.filter(x=>x!==r);},400); },1200);
+}
+
+/* ---------------- 生怪 / 死亡 ---------------- */
+const ENEMY_SLOTS=[[0.22,0.16],[0.34,0.16],[0.46,0.16],[0.22,0.46],[0.34,0.46],[0.46,0.46],[0.22,0.74],[0.34,0.74],[0.46,0.74]];
+function freeSlot(){
+  const used=new Set(S.enemies.map(e=>e.slotKey));
+  const free=ENEMY_SLOTS.map((s,i)=>i).filter(i=>!used.has(i));
+  if(!free.length) return {nx:0.3+Math.random()*0.2, ny:0.1+Math.random()*0.7, key:-1};
+  const idx=free[randi(0,free.length-1)];
+  return {nx:ENEMY_SLOTS[idx][0], ny:ENEMY_SLOTS[idx][1], key:idx};
+}
+function spawnEnemy(color,hp){
+  const sl=freeSlot();
+  const e=mkCard({type:'enemy',color,hp,maxhp:hp,nx:sl.nx,ny:sl.ny,slotKey:sl.key});
+  boardCards.push(e); S.enemies.push(e);
+  renderCard(e); positionCard(e);
+  return e;
+}
+function killEnemy(e){
+  const i=S.enemies.indexOf(e); if(i>=0) S.enemies.splice(i,1);
+  const j=boardCards.indexOf(e); if(j>=0) boardCards.splice(j,1);
+  if(e.el){e.el.remove();e.el=null;}
+  log(`${cardTitle(e)} 被击败，你变为${CNAME[e.color]}色`);
+}
+
+/* ---------------- 颜色切换 ---------------- */
+async function switchColor(c,reason){
+  S.color=c;
+  S.playerCard.color=c;
+  S.hp=Math.min(S.maxhp,S.hp+2);
+  refreshCard(S.playerCard);
+  toast(`颜色切换：${CNAME[c]}色（${reason}） · 回复 2 点生命`);
+  log(`颜色切换为 ${CNAME[c]}（${reason}）`);
+  drawHand();
+  updateUI();
+  await sleep(220);
+}
+
+/* ---------------- 回合结束 ---------------- */
+async function endTurn(){
+  if(busy||S.over) return;
+  busy=true;
+  toast('回合结束：敌人行动中…');
+  await sleep(350);
+  // 敌人攻击玩家
+  for(const e of S.enemies.slice()){
+    const m=mult(e.color,S.color);
+    const dmg=m===2?2:m===1?1:0;
+    if(dmg>0){
+      S.hp=Math.max(0,S.hp-dmg);
+      refreshCard(S.playerCard);
+      spawnResult(S.playerCard,`-${dmg}`,'#a8402f',null);
+      log(`${cardTitle(e)} 攻击你，造成 ${dmg} 点伤害`);
+      if(S.hp<=0){ lose(); busy=false; return; }
+      await sleep(260);
+    }
+  }
+  // BOSS 行动
+  await bossAct();
+  if(S.over){busy=false;return;}
+  // 切换为下一颜色
+  const next=(S.color+1)%3;
+  await switchColor(next,'回合结束');
+  S.stackUses=2;
+  S.turn++;
+  busy=false;
+  updateUI();
+  toast(`第 ${S.turn} 回合 · ${CNAME[S.color]}色`);
+}
+
+/* ---------------- BOSS ---------------- */
+async function bossAct(){
+  const b=S.boss;
+  if(!b) return;
+  const acts=['attack','shift'];
+  if(b.hp<b.maxhp) acts.push('heal');
+  if(S.enemies.some(e=>e.hp<e.maxhp)) acts.push('healTeam');
+  if(S.bossSummonCd<=0&&S.enemies.length<=2) acts.push('summon');
+  const pick=acts[randi(0,acts.length-1)];
+  if(pick==='summon'){
+    S.bossSummonCd=3;
+    const n=randi(1,2);
+    const must=countersOf(S.color); // 至少一个被玩家克制
+    for(let i=0;i<n;i++){
+      const c=i===0?must:randi(0,2);
+      const e=spawnEnemy(c,randi(3,6));
+      log(`BOSS 召唤了 ${cardTitle(e)}`);
+      await sleep(220);
+    }
+    toast('BOSS 召唤了新的小怪');
+  }else if(pick==='attack'){
+    const m=mult(b.color,S.color);
+    const dmg=m===2?6:m===1?3:0;
+    if(dmg>0){
+      S.hp=Math.max(0,S.hp-dmg);
+      refreshCard(S.playerCard);
+      spawnResult(S.playerCard,`-${dmg}`,'#a8402f',null);
+      log(`BOSS 攻击你，造成 ${dmg} 点伤害`);
+      if(S.hp<=0){ lose(); return; }
+    }else{
+      log('BOSS 的攻击被你的颜色克制，无效');
+      toast('BOSS 攻击无效（被克制）');
+    }
+  }else if(pick==='heal'){
+    b.hp=Math.min(b.maxhp,b.hp+5);
+    refreshCard(b);
+    log('BOSS 恢复 5 点生命');
+    spawnResult(b,'+5','#2f7a4d',null);
+  }else if(pick==='healTeam'){
+    for(const e of S.enemies){ e.hp=Math.min(e.maxhp,e.hp+2); refreshCard(e); }
+    log('BOSS 为全体小怪恢复 2 点生命');
+  }else{
+    const c=randi(0,2);
+    b.color=c; refreshCard(b);
+    log(`BOSS 随机变为 ${CNAME[c]}色`);
+  }
+  if(S.bossSummonCd>0&&pick!=='summon') S.bossSummonCd--;
+  await sleep(300);
+}
+
+/* ---------------- 胜负 ---------------- */
+function win(){
+  S.over=true;
+  document.getElementById('verdict').textContent='胜 利';
+  document.getElementById('verdict').className='verdict win';
+  document.getElementById('stats').textContent=`第 ${S.turn} 回合击败面具团长 · 剩余生命 ${S.hp}`;
+  document.getElementById('result').classList.remove('hidden');
+}
+function lose(){
+  S.over=true;
+  document.getElementById('verdict').textContent='失 败';
+  document.getElementById('verdict').className='verdict lose';
+  document.getElementById('stats').textContent=`坚持到第 ${S.turn} 回合 · BOSS 剩余生命 ${S.boss?S.boss.hp:0}`;
+  document.getElementById('result').classList.remove('hidden');
+}
+
+/* ---------------- 界面 ---------------- */
+function updateUI(){
+  if(!S) return;
+  document.getElementById('stackLeft').textContent=S.stackUses;
+  document.getElementById('btnStack').disabled=(S.stackUses<=0||busy||S.over);
+  document.getElementById('btnEnd').disabled=(busy||S.over);
+  document.getElementById('statusBox').innerHTML=
+    `回合 <b>${S.turn}</b> · 当前颜色 <b style="color:${HEX[S.color]}">${CNAME[S.color]}</b><br>
+     生命 <b>${S.hp}</b> / ${S.maxhp} · 结算机会 <b>${S.stackUses}</b>`;
+  document.getElementById('turnInfo').textContent=`第 ${S.turn} 回合 · ${CNAME[S.color]}色手牌`;
+  for(let c=0;c<3;c++){
+    document.getElementById('r'+c).textContent=S.decks[c].draw.length;
+    document.getElementById('p'+c).textContent=S.decks[c].played.length;
+  }
+}
+function log(t){
+  const d=document.createElement('div');
+  d.textContent=t;
+  logEl.prepend(d);
+  while(logEl.children.length>26) logEl.lastChild.remove();
+}
+let toastTimer=null;
+function toast(t){
+  toastEl.textContent=t;
+  toastEl.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>toastEl.classList.remove('on'),1600);
+}
+
+/* ---------------- 卡组查看 ---------------- */
+function openDeckModal(color,kind){
+  const list=kind==='remain'? S.decks[color].draw : S.decks[color].played;
+  document.getElementById('modalTitle').textContent=
+    `${CNAME[color]}色 · ${kind==='remain'?'剩余卡牌':'已打出卡牌'}（${list.length}）`;
+  const box=document.getElementById('modalList');
+  box.innerHTML='';
+  if(!list.length){ box.innerHTML='<div class="empty">这里还没有卡牌</div>'; }
+  else{
+    const sorted=list.slice().sort((a,b)=>(a.type==='heal'?0:1)-(b.type==='heal'?0:1)||a.dmg-b.dmg);
+    for(const k of sorted){
+      const d=document.createElement('div');
+      d.className='cItem c'+color;
+      d.innerHTML=`<b>${k.type==='heal'?'+1':k.dmg}</b>${k.type==='heal'?'恢复':'攻击'}`;
+      box.appendChild(d);
+    }
+  }
+  document.getElementById('modal').classList.add('on');
+}
+
+/* ---------------- 开局 ---------------- */
+function startGame(){
+  S=newState();
+  boardCards=[];busy=false;
+  boardEl.querySelectorAll('.card').forEach(e=>e.remove());
+  document.getElementById('game').classList.remove('hidden');
+  document.getElementById('menu').classList.add('hidden');
+  document.getElementById('result').classList.add('hidden');
+  logEl.innerHTML='';
+
+  // 玩家卡
+  const p=mkCard({type:'player',color:S.color,hp:100,maxhp:100,nx:0.06,ny:0.36});
+  S.playerCard=p; boardCards.push(p); renderCard(p); positionCard(p);
+
+  // BOSS 卡
+  const b=mkCard({type:'boss',color:randi(0,2),hp:50,maxhp:50,nx:0.72,ny:0.24});
+  S.boss=b; boardCards.push(b); renderCard(b); positionCard(b);
+
+  // 初始小怪
+  for(let i=0;i<3;i++) spawnEnemy(randi(0,2),randi(3,6));
+
+  drawHand();
+  updateUI();
+  log('牌局开始：BOSS 登台');
+  toast('拖拽手牌开始堆叠吧');
+}
+document.getElementById('btnStart').onclick=startGame;
+document.getElementById('btnRetry').onclick=startGame;
+document.getElementById('btnMenu').onclick=()=>{
+  document.getElementById('result').classList.add('hidden');
+  document.getElementById('menu').classList.remove('hidden');
+  document.getElementById('game').classList.add('hidden');
+};
+document.getElementById('btnStack').onclick=resolveStacks;
+document.getElementById('btnEnd').onclick=endTurn;
+document.getElementById('modalClose').onclick=()=>document.getElementById('modal').classList.remove('on');
+document.getElementById('modal').addEventListener('click',e=>{ if(e.target.id==='modal') e.currentTarget.classList.remove('on'); });
+document.querySelectorAll('.mini').forEach(btn=>{
+  btn.onclick=()=>openDeckModal(+btn.dataset.c,btn.dataset.act);
+});
+addEventListener('resize',()=>{ if(S) positionAll(); });
+if(location.hash==='#start') startGame(); // 调试：直接开局
+</script>
+</body>
+</html>
